@@ -1,0 +1,117 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.cproject
+.settings/
+*.code-workspace
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!cmake/*.cmake
+!cmake/*.cmake.in
+
+# vcpkg
+vcpkg_installed/
+
+# Testing
+Testing/
+CTestTestfile.cmake
+
+# Coverage
+*.gcno
+*.gcda
+*.gcov
+coverage/
+lcov.info
+
+# Documentation
+docs/_build/
+docs/html/
+docs/latex/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Package files
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+*.dmg
+*.msi
+
+# Logs
+*.log
+logs/
+
+# User data directory (runtime)
+~/.lumen/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Backup files
+*.bak
+*.backup
+
+# Editor backup files
+*~
+
+# Python bytecode (if any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+
+# Qt generated
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.autosave
+
+# Ninja
+.ninja_deps
+.ninja_log
+
+# compile_commands.json (local, regenerate)
+compile_commands.json

@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_DEFAULT_TRIPLET: x64-linux
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cc: gcc-11
+            cxx: g++-11
+          - compiler: clang
+            cc: clang-14
+            cxx: clang++-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libsqlite3-dev \
+            libeigen3-dev
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'a34c873a9717a888f58dc05268dea15592c2f0ff'
+
+      - name: Install vcpkg dependencies
+        run: |
+          vcpkg install nlohmann-json highs cpp-httplib cli11 gtest yaml-cpp
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+            -DCMAKE_C_COMPILER=${{matrix.cc}} \
+            -DCMAKE_CXX_COMPILER=${{matrix.cxx}} \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DBUILD_TESTS=ON \
+            -DBUILD_CLI=ON \
+            -DBUILD_SERVER=ON \
+            -DBUILD_GUI=OFF
+
+      - name: Build
+        run: cmake --build build --config ${{env.BUILD_TYPE}}
+
+      - name: Run tests
+        working-directory: build
+        run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure --verbose
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          brew install cmake ninja pkg-config sqlite eigen
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'a34c873a9717a888f58dc05268dea15592c2f0ff'
+
+      - name: Install vcpkg dependencies
+        run: |
+          vcpkg install nlohmann-json highs cpp-httplib cli11 gtest yaml-cpp
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+            -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+            -DBUILD_TESTS=ON \
+            -DBUILD_CLI=ON \
+            -DBUILD_SERVER=ON \
+            -DBUILD_GUI=OFF
+
+      - name: Build
+        run: cmake --build build --config ${{env.BUILD_TYPE}}
+
+      - name: Run tests
+        working-directory: build
+        run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure --verbose
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'a34c873a9717a888f58dc05268dea15592c2f0ff'
+
+      - name: Install vcpkg dependencies
+        run: |
+          vcpkg install nlohmann-json:x64-windows highs:x64-windows cpp-httplib:x64-windows cli11:x64-windows gtest:x64-windows yaml-cpp:x64-windows sqlite3:x64-windows eigen3:x64-windows
+
+      - name: Configure CMake
+        run: |
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DBUILD_TESTS=ON `
+            -DBUILD_CLI=ON `
+            -DBUILD_SERVER=ON `
+            -DBUILD_GUI=OFF
+
+      - name: Build
+        run: cmake --build build --config ${{env.BUILD_TYPE}}
+
+      - name: Run tests
+        working-directory: build
+        run: ctest -C ${{env.BUILD_TYPE}} --output-on-failure --verbose
+
+  code-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get install -y clang-format-14
+
+      - name: Check code formatting
+        run: |
+          find include src apps test -name '*.cpp' -o -name '*.hpp' | \
+            xargs clang-format-14 --dry-run --Werror
+
+      - name: Install clang-tidy
+        run: sudo apt-get install -y clang-tidy-14
+
+      - name: Install system dependencies for compile_commands.json
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libsqlite3-dev libeigen3-dev
+
+      - name: Generate compile_commands.json
+        run: |
+          cmake -B build \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DBUILD_TESTS=OFF \
+            -DBUILD_CLI=OFF \
+            -DBUILD_SERVER=OFF || true
+
+      # Note: clang-tidy check is informational only for now
+      # - name: Run clang-tidy
+      #   run: |
+      #     find src -name '*.cpp' | head -5 | \
+      #       xargs clang-tidy-14 -p build --warnings-as-errors='*'

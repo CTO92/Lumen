@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Lumen
+GenericName=Portfolio Optimizer
+Comment=Quantum-Enhanced Portfolio Optimization
+Exec=lumen-gui %F
+Icon=lumen
+Terminal=false
+Categories=Office;Finance;
+Keywords=portfolio;optimization;quantum;investment;
+MimeType=application/x-lumen-portfolio;
+StartupNotify=true
+StartupWMClass=lumen-gui

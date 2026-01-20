@@ -1,0 +1,10 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/icons">
+        <file>icons/lumen.png</file>
+    </qresource>
+    <qresource prefix="/styles">
+        <file>styles/light.qss</file>
+        <file>styles/dark.qss</file>
+    </qresource>
+</RCC>

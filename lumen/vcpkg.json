@@ -1,0 +1,78 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "lumen",
+  "version": "1.0.0",
+  "description": "Lumen - Quantum-Enhanced Edge Reasoning Engine for Portfolio Optimization",
+  "homepage": "https://github.com/oaqlabs/lumen",
+  "license": "MIT",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "eigen3",
+      "version>=": "3.4.0"
+    },
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.11.0"
+    },
+    {
+      "name": "sqlite3",
+      "version>=": "3.40.0"
+    },
+    {
+      "name": "highs",
+      "version>=": "1.5.0"
+    },
+    {
+      "name": "cpp-httplib",
+      "version>=": "0.14.0"
+    },
+    {
+      "name": "cli11",
+      "version>=": "2.3.0"
+    },
+    {
+      "name": "gtest",
+      "version>=": "1.14.0"
+    },
+    {
+      "name": "yaml-cpp",
+      "version>=": "0.8.0"
+    }
+  ],
+  "features": {
+    "gui": {
+      "description": "Build Qt desktop GUI",
+      "dependencies": [
+        {
+          "name": "qtbase",
+          "version>=": "6.5.0",
+          "default-features": false,
+          "features": ["widgets"]
+        },
+        {
+          "name": "qtcharts",
+          "version>=": "6.5.0"
+        }
+      ]
+    },
+    "benchmarks": {
+      "description": "Build performance benchmarks",
+      "dependencies": [
+        {
+          "name": "benchmark",
+          "version>=": "1.8.0"
+        }
+      ]
+    },
+    "symengine": {
+      "description": "Enable symbolic mathematics with SymEngine",
+      "dependencies": [
+        {
+          "name": "symengine",
+          "version>=": "0.11.0"
+        }
+      ]
+    }
+  }
+}
