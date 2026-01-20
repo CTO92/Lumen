@@ -3,7 +3,8 @@
     "allow": [
       "Bash(xargs sed:*)",
       "Bash(tree:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(git config:*)"
     ]
   }
 }
