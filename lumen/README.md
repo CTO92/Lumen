@@ -1,4 +1,4 @@
-# Lumen
+# Lumen (pre-release V1.0.0=alpha)
 
 **Quantum-Enhanced Edge Reasoning Engine for Portfolio Optimization**
 
