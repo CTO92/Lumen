@@ -5,11 +5,11 @@
 [![CI](https://github.com/oaqlabs/lumen/actions/workflows/ci.yml/badge.svg)](https://github.com/oaqlabs/lumen/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Lumen is an open-source edge reasoning engine that brings deterministic AI to financial portfolio optimization. Unlike statistical machine learning approaches, Lumen uses explicit constraint-based reasoning to solve optimization problems with mathematical rigor and full explainability.
+Lumen is an open-source edge reasoning engine that brings AI to financial portfolio optimization. Unlike statistical machine learning approaches, Lumen uses explicit constraint-based reasoning to solve optimization problems with mathematical rigor and full explainability.
 
 ## Key Features
 
-- **Deterministic, Explainable AI** - Every recommendation traceable to specific constraints
+- **Explainable AI** - Every recommendation traceable to specific constraints
 - **Edge-First Computation** - Runs on personal computers without cloud dependency
 - **Hybrid Classical-Quantum** - Optional quantum enhancement for complex scenarios
 - **Tax-Aware Optimization** - Tax-loss harvesting with wash sale compliance
