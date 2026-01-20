@@ -7,6 +7,12 @@
 
 Lumen is an open-source edge reasoning engine that brings AI to financial portfolio optimization. Unlike statistical machine learning approaches, Lumen uses explicit constraint-based reasoning to solve optimization problems with mathematical rigor and full explainability.
 
+## About The Author
+
+Lumen is a creation of OA Quantum Labs and its CTO Danny Wall. If you'd like to work with us on your AI or quantum enhanced projects, let us know. Contact Danny at dwall@oaqlabs.com 
+
+Visit us on the web at https://oaqlabs.com
+
 ## Key Features
 
 - **Explainable AI** - Every recommendation traceable to specific constraints
