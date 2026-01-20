@@ -1,0 +1,44 @@
+# Claude Code local settings (user-specific permissions)
+.claude/settings.local.json
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*credentials*
+*secret*
+
+# Build artifacts
+build/
+out/
+cmake-build-*/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Backup files
+*.bak
+*.backup
