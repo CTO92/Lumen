@@ -86,7 +86,10 @@ struct MarketDataConfig {
 
 /// Observability configuration
 struct ObservabilityConfig {
-    bool pyflare_enabled = true;                     ///< Enable PyFlare telemetry
+    /// SECURITY: Telemetry disabled by default - requires explicit opt-in
+    /// Users must set LUMEN_PYFLARE_ENABLED=true or configure in config file
+    bool pyflare_enabled = false;                    ///< Enable PyFlare telemetry (opt-in)
+    bool telemetry_consent_given = false;            ///< User has explicitly consented
     std::string pyflare_log_directory = "~/.lumen/logs/pyflare/";  ///< PyFlare log dir
     bool local_logging_enabled = true;               ///< Enable local logging
     std::string local_log_file = "~/.lumen/logs/lumen.log";  ///< Log file path

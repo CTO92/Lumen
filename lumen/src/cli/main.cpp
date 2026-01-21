@@ -20,11 +20,13 @@
 #include <CLI/CLI.hpp>
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 
@@ -116,13 +118,26 @@ bool initialize(const std::string& config_path = "") {
     return true;
 }
 
-/// @brief Generate a unique session ID
+/// @brief Generate a cryptographically secure unique session ID
+/// @details Uses random_device for cryptographic randomness instead of timestamp
 std::string generateSessionId() {
-    auto now = std::chrono::system_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now.time_since_epoch()).count();
+    // SECURITY FIX: Use cryptographically secure random generation
+    // instead of predictable timestamp-based IDs
+    std::random_device rd;
+    std::array<uint8_t, 16> bytes;
+
+    for (auto& byte : bytes) {
+        byte = static_cast<uint8_t>(rd());
+    }
+
+    static const char hex_chars[] = "0123456789abcdef";
     std::stringstream ss;
-    ss << "OPT_" << std::hex << ms;
+    ss << "OPT_";
+
+    for (uint8_t byte : bytes) {
+        ss << hex_chars[byte >> 4] << hex_chars[byte & 0x0F];
+    }
+
     return ss.str();
 }
 

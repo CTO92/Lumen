@@ -78,6 +78,11 @@ public:
             throw std::runtime_error("Path contains null byte");
         }
 
+        // Reject paths with suspicious patterns
+        if (path.find("..") != std::string::npos) {
+            throw std::runtime_error("Path contains directory traversal sequence");
+        }
+
         // Normalize the path using filesystem
         try {
             fs::path normalized = fs::weakly_canonical(fs::path(path));
@@ -102,15 +107,16 @@ public:
 
             fs::path lumen_home_path = fs::weakly_canonical(fs::path(lumen_home));
 
-            // For config files, also allow system config directories
+            // SECURITY: Only allow paths within specific trusted directories
+            // Do NOT include current working directory - this was a security vulnerability
             std::vector<fs::path> allowed_dirs = {
                 lumen_home_path,
                 fs::path("/etc/lumen"),
                 fs::path("/usr/local/etc/lumen"),
             };
 
-            // Also allow the current working directory for development
-            allowed_dirs.push_back(fs::weakly_canonical(fs::current_path()));
+            // SECURITY FIX: Removed current working directory from whitelist
+            // CWD is not a safe default as it could be set to an attacker-controlled location
 
             // Check if normalized path is within any allowed directory
             bool is_allowed = false;

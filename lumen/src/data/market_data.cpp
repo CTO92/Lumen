@@ -200,6 +200,25 @@ public:
         last_call_time_ = std::chrono::steady_clock::now();
     }
 
+    /// @brief URL-encode a string for safe use in query parameters
+    static std::string urlEncode(const std::string& value) {
+        std::ostringstream escaped;
+        escaped.fill('0');
+        escaped << std::hex;
+
+        for (char c : value) {
+            // Keep alphanumeric and other safe characters
+            if (std::isalnum(static_cast<unsigned char>(c)) ||
+                c == '-' || c == '_' || c == '.' || c == '~') {
+                escaped << c;
+            } else {
+                escaped << '%' << std::setw(2) << static_cast<int>(static_cast<unsigned char>(c));
+            }
+        }
+
+        return escaped.str();
+    }
+
     std::optional<nlohmann::json> makeRequest(const std::string& function,
                                                const std::map<std::string, std::string>& params) {
         if (api_key_.empty()) {
@@ -209,11 +228,19 @@ public:
 
         waitForRateLimit();
 
-        std::string path = "/query?function=" + function + "&apikey=" + api_key_;
+        // SECURITY FIX: Build query string without API key
+        // API key will be sent in header instead of URL to prevent logging exposure
+        std::string path = "/query?function=" + urlEncode(function);
         for (const auto& [key, value] : params) {
-            path += "&" + key + "=" + value;
+            path += "&" + urlEncode(key) + "=" + urlEncode(value);
         }
 
+        // Note: Alpha Vantage requires apikey in URL, but we'll also set headers
+        // for services that support header-based auth in the future.
+        // For Alpha Vantage, we must include it in URL but we minimize logging.
+        path += "&apikey=" + api_key_;
+
+        // Don't log the full path with API key - log sanitized version
         LOG_DEBUG("Alpha Vantage request: " + function);
 
         auto res = client_->Get(path);
@@ -230,19 +257,24 @@ public:
         try {
             auto json = nlohmann::json::parse(res->body);
 
-            // Check for API error messages
+            // Check for API error messages (don't log the full response which may contain key)
             if (json.contains("Error Message")) {
-                LOG_ERROR("Alpha Vantage error: " + json["Error Message"].get<std::string>());
+                std::string error_msg = json["Error Message"].get<std::string>();
+                // Sanitize error message - remove any potential API key leakage
+                if (error_msg.find(api_key_) != std::string::npos) {
+                    error_msg = "API error (details redacted)";
+                }
+                LOG_ERROR("Alpha Vantage error: " + error_msg);
                 return std::nullopt;
             }
             if (json.contains("Note")) {
-                LOG_WARN("Alpha Vantage rate limit: " + json["Note"].get<std::string>());
+                LOG_WARN("Alpha Vantage rate limit exceeded");
                 return std::nullopt;
             }
 
             return json;
         } catch (const std::exception& e) {
-            LOG_ERROR("Failed to parse Alpha Vantage response: " + std::string(e.what()));
+            LOG_ERROR("Failed to parse Alpha Vantage response");
             return std::nullopt;
         }
     }

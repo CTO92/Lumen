@@ -48,7 +48,7 @@ struct ConstraintSetRecord {
     std::chrono::system_clock::time_point created_at;
 };
 
-/// @brief RAII wrapper for SQLite database connection
+/// @brief RAII wrapper for SQLite database connection with encryption support
 class Database {
 public:
     Database();
@@ -58,14 +58,22 @@ public:
     Database(const Database&) = delete;
     Database& operator=(const Database&) = delete;
 
-    /// Open database at path
+    /// Open database at path (uses encryption if configured and LUMEN_DB_KEY set)
     bool open(const std::string& path);
+
+    /// Open database with explicit encryption key (requires SQLCipher)
+    /// @param path Database file path
+    /// @param key Encryption key (empty string disables encryption)
+    bool openEncrypted(const std::string& path, const std::string& key);
 
     /// Close database
     void close();
 
     /// Check if database is open
     bool isOpen() const;
+
+    /// Check if database is encrypted
+    bool isEncrypted() const;
 
     /// Execute SQL statement
     bool execute(const std::string& sql);
@@ -237,7 +245,10 @@ PersistenceManager& getPersistenceManager();
 /// Initialize global persistence manager
 bool initializePersistence(const std::string& db_path);
 
-/// Generate a unique ID
+/// Generate a cryptographically secure unique ID (128-bit random)
 std::string generateUniqueId();
+
+/// Generate a cryptographically secure session ID (256-bit random)
+std::string generateSecureSessionId();
 
 }  // namespace lumen::data

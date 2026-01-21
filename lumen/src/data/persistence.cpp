@@ -3,9 +3,15 @@
 ///
 /// Implementation of the SQLite-based persistence layer for portfolios,
 /// tax lots, and optimization history.
+///
+/// Security features:
+/// - Cryptographically secure ID generation using std::random_device
+/// - Support for SQLite encryption via SQLCipher (when available)
+/// - Secure file permissions on database files
 
 #include "lumen/data/persistence.hpp"
 #include "lumen/utils/logging.hpp"
+#include "lumen/utils/config.hpp"
 
 #include <sqlite3.h>
 
@@ -15,28 +21,98 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <array>
+#include <cstring>
+
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace lumen::data {
 
 namespace fs = std::filesystem;
 
 // =============================================================================
-// Helper Functions
+// Cryptographically Secure ID Generation
 // =============================================================================
 
+/// @brief Thread-safe cryptographically secure random number generator
+class SecureRandom {
+public:
+    static SecureRandom& getInstance() {
+        static SecureRandom instance;
+        return instance;
+    }
+
+    /// @brief Generate cryptographically secure random bytes
+    void getBytes(uint8_t* buffer, size_t length) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (size_t i = 0; i < length; ++i) {
+            buffer[i] = static_cast<uint8_t>(rd_());
+        }
+    }
+
+    /// @brief Generate a random 64-bit integer
+    uint64_t getUint64() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::array<uint8_t, 8> bytes;
+        for (auto& b : bytes) {
+            b = static_cast<uint8_t>(rd_());
+        }
+        uint64_t result = 0;
+        for (int i = 0; i < 8; ++i) {
+            result = (result << 8) | bytes[i];
+        }
+        return result;
+    }
+
+private:
+    SecureRandom() = default;
+    std::random_device rd_;
+    std::mutex mutex_;
+};
+
 std::string generateUniqueId() {
-    static std::random_device rd;
-    static std::mt19937_64 gen(rd());
-    static std::uniform_int_distribution<uint64_t> dis;
+    auto& rng = SecureRandom::getInstance();
 
-    uint64_t r1 = dis(gen);
-    uint64_t r2 = dis(gen);
+    // Generate 128 bits (16 bytes) of cryptographically random data
+    std::array<uint8_t, 16> bytes;
+    rng.getBytes(bytes.data(), bytes.size());
 
-    std::ostringstream oss;
-    oss << std::hex << std::setfill('0')
-        << std::setw(16) << r1
-        << std::setw(16) << r2;
-    return oss.str();
+    // Format as UUID-like hex string
+    static const char hex_chars[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(32);
+
+    for (uint8_t byte : bytes) {
+        result += hex_chars[byte >> 4];
+        result += hex_chars[byte & 0x0F];
+    }
+
+    return result;
+}
+
+/// @brief Generate a cryptographically secure session ID
+std::string generateSecureSessionId() {
+    auto& rng = SecureRandom::getInstance();
+
+    // Generate 256 bits for session IDs (extra security for session tokens)
+    std::array<uint8_t, 32> bytes;
+    rng.getBytes(bytes.data(), bytes.size());
+
+    static const char hex_chars[] = "0123456789abcdef";
+    std::string result = "SID_";
+    result.reserve(68);  // "SID_" + 64 hex chars
+
+    for (uint8_t byte : bytes) {
+        result += hex_chars[byte >> 4];
+        result += hex_chars[byte & 0x0F];
+    }
+
+    return result;
 }
 
 static int64_t getCurrentTimestamp() {
@@ -56,12 +132,64 @@ class Database::Impl {
 public:
     sqlite3* db_ = nullptr;
     std::string last_error_;
+    std::string db_path_;
+    bool encrypted_ = false;
     mutable std::mutex mutex_;
 
     ~Impl() {
         if (db_) {
             sqlite3_close(db_);
         }
+    }
+
+    /// @brief Set secure file permissions (owner read/write only)
+    static bool setSecurePermissions(const std::string& path) {
+#ifndef _WIN32
+        // Unix: Set file permissions to 0600 (owner read/write only)
+        if (chmod(path.c_str(), S_IRUSR | S_IWUSR) != 0) {
+            return false;
+        }
+#else
+        // Windows: File permissions are handled differently
+        // For now, just return true - would need Windows ACL for proper implementation
+        (void)path;
+#endif
+        return true;
+    }
+
+    /// @brief Apply encryption key if SQLCipher is available
+    bool applyEncryption(const std::string& key) {
+        if (key.empty() || !db_) {
+            return false;
+        }
+
+#ifdef SQLITE_HAS_CODEC
+        // SQLCipher is available - apply encryption key
+        int rc = sqlite3_key(db_, key.c_str(), static_cast<int>(key.length()));
+        if (rc != SQLITE_OK) {
+            last_error_ = "Failed to apply encryption key";
+            return false;
+        }
+        encrypted_ = true;
+
+        // Verify the key works by running a simple query
+        char* err_msg = nullptr;
+        rc = sqlite3_exec(db_, "SELECT count(*) FROM sqlite_master;", nullptr, nullptr, &err_msg);
+        if (rc != SQLITE_OK) {
+            if (err_msg) {
+                last_error_ = "Encryption key verification failed: " + std::string(err_msg);
+                sqlite3_free(err_msg);
+            }
+            return false;
+        }
+        return true;
+#else
+        // SQLCipher not available - log warning
+        LOG_WARN("Database encryption requested but SQLCipher is not available. "
+                 "Data will be stored unencrypted. Install SQLCipher for encryption support.");
+        (void)key;
+        return false;
+#endif
     }
 };
 
@@ -77,7 +205,9 @@ bool Database::open(const std::string& path) {
         impl_->db_ = nullptr;
     }
 
-    // Ensure parent directory exists
+    impl_->db_path_ = path;
+
+    // Ensure parent directory exists with secure permissions
     fs::path db_path(path);
     if (db_path.has_parent_path()) {
         std::error_code ec;
@@ -86,6 +216,11 @@ bool Database::open(const std::string& path) {
             impl_->last_error_ = "Failed to create directory: " + ec.message();
             return false;
         }
+
+#ifndef _WIN32
+        // Set directory permissions to 0700 (owner only)
+        chmod(db_path.parent_path().c_str(), S_IRWXU);
+#endif
     }
 
     int rc = sqlite3_open(path.c_str(), &impl_->db_);
@@ -94,6 +229,28 @@ bool Database::open(const std::string& path) {
         sqlite3_close(impl_->db_);
         impl_->db_ = nullptr;
         return false;
+    }
+
+    // Set secure file permissions on the database file
+    Impl::setSecurePermissions(path);
+
+    // Check if encryption is enabled in configuration
+    try {
+        auto& config = utils::Configuration::getInstance();
+        if (config.getPersistenceConfig().encryption_enabled) {
+            // Get encryption key from environment variable
+            const char* db_key = std::getenv("LUMEN_DB_KEY");
+            if (db_key && std::strlen(db_key) > 0) {
+                if (!impl_->applyEncryption(db_key)) {
+                    LOG_WARN("Database encryption failed: " + impl_->last_error_);
+                }
+            } else {
+                LOG_WARN("Database encryption enabled but LUMEN_DB_KEY not set. "
+                         "Data will be stored unencrypted.");
+            }
+        }
+    } catch (...) {
+        // Configuration not available yet - proceed without encryption
     }
 
     // Enable foreign keys
@@ -105,7 +262,26 @@ bool Database::open(const std::string& path) {
     // Set synchronous mode
     sqlite3_exec(impl_->db_, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
 
+    // Security: Disable loading of extensions
+    sqlite3_db_config(impl_->db_, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 0, nullptr);
+
     return true;
+}
+
+bool Database::openEncrypted(const std::string& path, const std::string& key) {
+    if (!open(path)) {
+        return false;
+    }
+
+    if (!key.empty()) {
+        return impl_->applyEncryption(key);
+    }
+
+    return true;
+}
+
+bool Database::isEncrypted() const {
+    return impl_->encrypted_;
 }
 
 void Database::close() {

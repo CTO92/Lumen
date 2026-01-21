@@ -79,8 +79,53 @@ std::string trim(const std::string& str) {
     return str.substr(first, last - first + 1);
 }
 
-// Parse CSV line respecting quotes
-std::vector<std::string> parseCSVLine(const std::string& line, char delimiter = ',') {
+/// @brief SECURITY: Sanitize CSV field to prevent formula injection
+/// @details When CSV data is opened in spreadsheet applications (Excel, Google Sheets),
+///          cells starting with =, +, -, @, or tab can be interpreted as formulas,
+///          potentially leading to code execution or data exfiltration.
+std::string sanitizeCSVField(const std::string& field) {
+    if (field.empty()) {
+        return field;
+    }
+
+    // Characters that trigger formula interpretation in spreadsheets
+    static const std::string dangerous_prefixes = "=+-@\t";
+
+    char first_char = field[0];
+    if (dangerous_prefixes.find(first_char) != std::string::npos) {
+        // Prefix with single quote to prevent formula interpretation
+        return "'" + field;
+    }
+
+    return field;
+}
+
+/// @brief SECURITY: Check if a CSV field contains potentially dangerous content
+bool isFieldSuspicious(const std::string& field) {
+    if (field.empty()) return false;
+
+    // Check for formula injection attempts
+    static const std::string dangerous_prefixes = "=+-@\t";
+    if (dangerous_prefixes.find(field[0]) != std::string::npos) {
+        return true;
+    }
+
+    // Check for DDE (Dynamic Data Exchange) injection
+    // Patterns like =cmd|' or @SUM(1+1)*cmd|'
+    std::string lower_field = field;
+    std::transform(lower_field.begin(), lower_field.end(), lower_field.begin(), ::tolower);
+    if (lower_field.find("cmd|") != std::string::npos ||
+        lower_field.find("powershell|") != std::string::npos ||
+        lower_field.find("|'") != std::string::npos) {
+        return true;
+    }
+
+    return false;
+}
+
+// Parse CSV line respecting quotes with security sanitization
+std::vector<std::string> parseCSVLine(const std::string& line, char delimiter = ',',
+                                       bool sanitize = true) {
     std::vector<std::string> fields;
     std::string field;
     bool in_quotes = false;
@@ -97,13 +142,23 @@ std::vector<std::string> parseCSVLine(const std::string& line, char delimiter = 
                 in_quotes = !in_quotes;
             }
         } else if (c == delimiter && !in_quotes) {
-            fields.push_back(trim(field));
+            std::string trimmed = trim(field);
+            // SECURITY: Sanitize field if requested
+            if (sanitize) {
+                trimmed = sanitizeCSVField(trimmed);
+            }
+            fields.push_back(trimmed);
             field.clear();
         } else {
             field += c;
         }
     }
-    fields.push_back(trim(field));
+
+    std::string trimmed = trim(field);
+    if (sanitize) {
+        trimmed = sanitizeCSVField(trimmed);
+    }
+    fields.push_back(trimmed);
 
     return fields;
 }
