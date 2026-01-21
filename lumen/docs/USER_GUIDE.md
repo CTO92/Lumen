@@ -208,6 +208,16 @@ You can also configure Lumen via environment variables:
 | `DWAVE_API_KEY` | D-Wave quantum API key | `your_api_key` |
 | `IBM_QUANTUM_API_KEY` | IBM Quantum API key | `your_api_key` |
 
+#### Security Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `LUMEN_API_KEY` | API key for HTTP server authentication | `your_secure_api_key` |
+| `LUMEN_DB_KEY` | Database encryption key (requires SQLCipher) | `your_encryption_key` |
+| `LUMEN_PYFLARE_ENABLED` | Enable telemetry (opt-in, default: false) | `true` or `false` |
+
+> **Security Note:** Store sensitive environment variables in a secure location. Never commit API keys or encryption keys to version control. Consider using a secrets manager for production deployments.
+
 ### Managing Configuration
 
 Use the `lumen config` command to view and modify configuration:
@@ -1599,8 +1609,86 @@ Lumen includes a REST API server for integration with other applications.
 ### Starting the Server
 
 ```bash
-lumen-server --port 8080 --host 0.0.0.0
+# Basic usage (localhost only - secure default)
+lumen-server --port 8080
+
+# With TLS encryption (recommended for production)
+lumen-server --port 8443 --tls --cert /path/to/cert.pem --key /path/to/key.pem
+
+# Allow external connections (requires explicit flag)
+lumen-server --port 8080 --allow-external
+
+# Full production setup with TLS and external access
+lumen-server --port 8443 --tls --cert /path/to/cert.pem --key /path/to/key.pem --allow-external
 ```
+
+### Server Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-H, --host` | Host to bind to | `127.0.0.1` |
+| `-p, --port` | Port to listen on | `8080` |
+| `-c, --config` | Path to configuration file | None |
+| `--tls` | Enable TLS/SSL encryption | Disabled |
+| `--cert` | Path to TLS certificate file | Required with `--tls` |
+| `--key` | Path to TLS private key file | Required with `--tls` |
+| `--allow-external` | Bind to 0.0.0.0 for external access | Disabled |
+
+### Security Features
+
+The HTTP server includes several security features:
+
+#### Authentication
+
+All endpoints except `/health` require API key authentication. Set your API key:
+
+```bash
+# Set API key via environment variable
+export LUMEN_API_KEY=your_secure_api_key_here
+
+# Or add keys to ~/.lumen/api_keys.txt (one per line)
+echo "your_api_key_here" >> ~/.lumen/api_keys.txt
+```
+
+Include the API key in requests using the `Authorization` header:
+
+```bash
+# Using Bearer token format
+curl -H "Authorization: Bearer your_api_key_here" http://localhost:8080/version
+
+# Using ApiKey format
+curl -H "Authorization: ApiKey your_api_key_here" http://localhost:8080/status
+```
+
+If no API key is configured, the server will generate a temporary key and display it in the logs.
+
+#### Rate Limiting
+
+The server enforces rate limiting to prevent abuse:
+- **100 requests per minute** per IP address
+- Exceeding the limit returns HTTP 429 (Too Many Requests)
+
+#### TLS/SSL Encryption
+
+For production deployments, always enable TLS:
+
+```bash
+# Generate a self-signed certificate for testing
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+
+# Start server with TLS
+lumen-server --tls --cert cert.pem --key key.pem --port 8443
+```
+
+> **Warning:** Never expose the HTTP server to untrusted networks without TLS enabled.
+
+#### Security Headers
+
+All responses include security headers:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Content-Security-Policy: default-src 'none'`
+- `Strict-Transport-Security` (when TLS enabled)
 
 ### API Endpoints
 

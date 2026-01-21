@@ -2197,6 +2197,39 @@ valgrind --tool=callgrind ./build/lumen-cli optimize ...
 
 ## Security Considerations
 
+Lumen implements comprehensive security measures to protect sensitive financial data. This section documents security features and best practices for developers.
+
+### Security Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Security Layers                             │
+├─────────────────────────────────────────────────────────────────┤
+│  Transport Security    │ TLS/SSL for HTTP server                │
+│                        │ HTTPS for external API calls           │
+├────────────────────────┼────────────────────────────────────────┤
+│  Authentication        │ API key authentication (Bearer/ApiKey) │
+│                        │ Key file support (~/.lumen/api_keys.txt)│
+├────────────────────────┼────────────────────────────────────────┤
+│  Data Protection       │ SQLCipher database encryption          │
+│                        │ Secure file permissions (0600/0700)    │
+├────────────────────────┼────────────────────────────────────────┤
+│  Input Validation      │ Path traversal protection              │
+│                        │ JSON depth/size limits                 │
+│                        │ CSV injection sanitization             │
+├────────────────────────┼────────────────────────────────────────┤
+│  Rate Limiting         │ 100 requests/minute per IP             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Security Environment Variables
+
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `LUMEN_API_KEY` | HTTP server authentication | For server deployment |
+| `LUMEN_DB_KEY` | Database encryption key | For encrypted databases |
+| `LUMEN_PYFLARE_ENABLED` | Telemetry opt-in (default: false) | Optional |
+
 ### Input Validation
 
 All public APIs validate inputs:
@@ -2215,11 +2248,112 @@ Position Position::fromJSON(const nlohmann::json& j) {
 }
 ```
 
+### Path Traversal Protection
+
+The configuration system enforces a strict directory whitelist:
+
+```cpp
+// Only these directories are allowed for file operations:
+// - ~/.lumen (LUMEN_HOME)
+// - /etc/lumen
+// - /usr/local/etc/lumen
+
+// Path validation rejects:
+// - Null bytes in paths
+// - Directory traversal sequences (..)
+// - Paths outside the whitelist
+```
+
 ### API Key Security
 
 - API keys stored in environment variables or encrypted config
 - Never logged or included in error messages
 - Never sent to unauthorized endpoints
+- Sanitized from all external error responses
+
+```cpp
+// CORRECT: Sanitize error messages
+LOG_ERROR("Alpha Vantage error: API error (details redacted)");
+
+// WRONG: Never log API keys
+LOG_ERROR("Request failed with key: " + api_key_);  // DON'T DO THIS
+```
+
+### Database Encryption
+
+Enable database encryption for sensitive financial data:
+
+```cpp
+// Open encrypted database (requires SQLCipher)
+Database db;
+db.openEncrypted("/path/to/lumen.db", encryption_key);
+
+// Check encryption status
+if (db.isEncrypted()) {
+    LOG_INFO("Database encryption active");
+}
+```
+
+Set up encryption via environment:
+
+```bash
+export LUMEN_DB_KEY="your-strong-encryption-key"
+```
+
+### Secure Random Generation
+
+Always use cryptographically secure random generation for IDs and tokens:
+
+```cpp
+#include "lumen/data/persistence.hpp"
+
+// Generate secure unique ID (128-bit random)
+std::string id = lumen::data::generateUniqueId();
+
+// Generate secure session ID (256-bit random)
+std::string session = lumen::data::generateSecureSessionId();
+```
+
+### CSV Injection Protection
+
+When importing CSV data, fields are automatically sanitized:
+
+```cpp
+// Dangerous prefixes (=, +, -, @, tab) are escaped with single quote
+// Input: "=cmd|'/C calc.exe'"
+// Output: "'=cmd|'/C calc.exe'"
+```
+
+### HTTP Server Security
+
+The server includes multiple security layers:
+
+```cpp
+// Security constants
+constexpr size_t MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024;  // 10 MB
+constexpr size_t MAX_JSON_DEPTH = 32;
+constexpr int RATE_LIMIT_REQUESTS = 100;
+constexpr int RATE_LIMIT_WINDOW_SECONDS = 60;
+
+// All responses include security headers
+void addSecurityHeaders(httplib::Response& res) {
+    res.set_header("X-Content-Type-Options", "nosniff");
+    res.set_header("X-Frame-Options", "DENY");
+    res.set_header("Content-Security-Policy", "default-src 'none'");
+    res.set_header("Strict-Transport-Security", "max-age=31536000");
+}
+```
+
+### Telemetry Privacy
+
+Telemetry is disabled by default and requires explicit opt-in:
+
+```cpp
+struct ObservabilityConfig {
+    bool pyflare_enabled = false;           // Opt-in only
+    bool telemetry_consent_given = false;   // Requires explicit consent
+};
+```
 
 ### Size Limits
 
@@ -2228,7 +2362,23 @@ constexpr size_t MAX_POSITIONS = 10000;
 constexpr size_t MAX_CONSTRAINTS = 1000;
 constexpr size_t MAX_TARGETS = 1000;
 constexpr size_t MAX_HISTORY_ENTRIES = 100000;
+constexpr size_t MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024;  // 10 MB
+constexpr size_t MAX_JSON_DEPTH = 32;
+constexpr size_t MAX_TICKER_LENGTH = 10;
 ```
+
+### Security Checklist for Contributors
+
+When contributing code, ensure:
+
+- [ ] All user inputs are validated before use
+- [ ] File paths are sanitized through `Configuration::sanitizePath()`
+- [ ] API keys are never logged or included in error messages
+- [ ] Random IDs use `generateUniqueId()` or `generateSecureSessionId()`
+- [ ] External error messages don't leak internal details
+- [ ] New HTTP endpoints include authentication checks
+- [ ] CSV data is sanitized for formula injection
+- [ ] Database operations use prepared statements (no string concatenation)
 
 ---
 
